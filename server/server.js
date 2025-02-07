@@ -4,6 +4,10 @@ const axios = require('axios');
 const geoip = require('geoip-lite');
 require('dotenv').config();
 
+// Simple in-memory cache
+const cache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -99,6 +103,14 @@ app.use(express.json());
 app.post('/api/get-resources', async (req, res) => {
     const { subject } = req.body;
     
+    // Check cache
+    const cacheKey = subject.toLowerCase();
+    const cachedData = cache.get(cacheKey);
+    if (cachedData && (Date.now() - cachedData.timestamp < CACHE_DURATION)) {
+        console.log('Serving from cache:', cacheKey);
+        return res.json(cachedData.data);
+    }
+
     // Get client IP and location
     const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const geo = geoip.lookup(ip);
@@ -191,6 +203,12 @@ app.post('/api/get-resources', async (req, res) => {
                 },
                 resources: resources
             };
+
+            // Cache the response
+            cache.set(cacheKey, {
+                timestamp: Date.now(),
+                data: responseData
+            });
 
             res.json(responseData);
         } catch (parseError) {

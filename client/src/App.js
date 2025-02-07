@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -17,12 +17,16 @@ import {
   Tabs,
   Tab,
   useTheme,
+  Chip,
+  Popper,
+  ClickAwayListener,
 } from '@mui/material';
 import { styled, alpha, createTheme, ThemeProvider } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { motion } from 'framer-motion';
+import { cacheService } from './utils/cache';
 
 // Styled components
 const GlassBox = styled(motion.div)(({ theme }) => ({
@@ -53,6 +57,17 @@ const SearchInput = styled(InputBase)(({ theme }) => ({
       border: '1px solid rgba(255, 255, 255, 0.2)',
     },
   },
+}));
+
+// Styled component for search suggestions
+const SearchSuggestions = styled(Paper)(({ theme }) => ({
+  background: 'rgba(255, 255, 255, 0.05)',
+  backdropFilter: 'blur(10px)',
+  borderRadius: '12px',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  padding: theme.spacing(2),
+  maxWidth: '400px',
+  width: '100%',
 }));
 
 // Theme
@@ -174,6 +189,13 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
+  const [recentSearches, setRecentSearches] = useState([]);
+  const [searchAnchorEl, setSearchAnchorEl] = useState(null);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  useEffect(() => {
+    setRecentSearches(cacheService.getRecentSearches());
+  }, []);
 
   // Handler to trigger resource fetch
   const handleSearch = async (e) => {
@@ -181,6 +203,16 @@ function App() {
     if (!subject.trim()) return;
     setLoading(true);
     setError(null);
+
+    // Check cache first
+    const cachedResult = cacheService.get(subject.toLowerCase());
+    if (cachedResult) {
+      setResources(cachedResult.resources);
+      setCurrency(cachedResult.currency);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('http://localhost:5000/api/get-resources', {
         method: 'POST',
@@ -194,6 +226,10 @@ function App() {
       const data = await response.json();
       setResources(data.resources);
       setCurrency(data.currency);
+      // Cache the result
+      cacheService.set(subject.toLowerCase(), data);
+      // Update recent searches
+      setRecentSearches(cacheService.getRecentSearches());
     } catch (err) {
       setError(`Error: ${err.message}. Please try again.`);
       console.error('Search error:', err);
@@ -202,26 +238,73 @@ function App() {
     }
   };
 
+  const handleRecentSearchClick = (term) => {
+    setSubject(term);
+    handleSearch({ preventDefault: () => {} });
+    setSearchAnchorEl(null);
+  };
+
   const levels = ['beginner', 'intermediate', 'advanced'];
 
   return (
     <ThemeProvider theme={theme}>
       {/* Amazon-like header */}
       <Box sx={{ flexGrow: 1 }}>
-        <AppBar position="static" sx={{ backgroundColor: theme.palette.primary.main }}>
+        <AppBar position="static" sx={{ backgroundColor: 'transparent', backdropFilter: 'blur(10px)' }}>
           <Toolbar>
             {/* Logo */}
-            <Typography variant="h6" noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 'bold', color: theme.palette.secondary.main }}>
-              Fakezon
+            <Typography variant="h6" component="div" sx={{ 
+              background: 'linear-gradient(45deg, #00f6ff, #9945FF)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontWeight: 700,
+              mr: 3
+            }}>
+              LearnHub
             </Typography>
-            <GlassBox>
-              <SearchInput
-                placeholder="Search products…"
-                inputProps={{ 'aria-label': 'search' }}
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-            </GlassBox>
+            <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 600 }}>
+              <GlassBox>
+                <SearchInput
+                  placeholder="Search for learning resources..."
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  onFocus={(e) => {
+                    setSearchAnchorEl(e.currentTarget);
+                    setInputFocused(true);
+                  }}
+                />
+              </GlassBox>
+              <Popper
+                open={inputFocused && recentSearches.length > 0}
+                anchorEl={searchAnchorEl}
+                placement="bottom-start"
+                style={{ width: searchAnchorEl?.offsetWidth }}
+              >
+                <ClickAwayListener onClickAway={() => setInputFocused(false)}>
+                  <SearchSuggestions>
+                    <Typography variant="subtitle2" sx={{ mb: 1, color: 'rgba(255,255,255,0.7)' }}>
+                      Recent Searches
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {recentSearches.map((term, index) => (
+                        <Chip
+                          key={index}
+                          label={term}
+                          onClick={() => handleRecentSearchClick(term)}
+                          sx={{
+                            background: 'rgba(255,255,255,0.1)',
+                            color: '#fff',
+                            '&:hover': {
+                              background: 'rgba(255,255,255,0.2)',
+                            },
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </SearchSuggestions>
+                </ClickAwayListener>
+              </Popper>
+            </Box>
             <Button variant="contained" color="secondary" onClick={handleSearch} disabled={loading} sx={{ marginLeft: 2 }}>
               {loading ? <CircularProgress size={20} /> : <SearchIcon />}
             </Button>
