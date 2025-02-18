@@ -4,9 +4,8 @@ const axios = require('axios');
 const geoip = require('geoip-lite');
 require('dotenv').config();
 
-// Simple in-memory cache
 const cache = new Map();
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_DURATION = 24 * 60 * 60 * 1000; 
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -14,24 +13,23 @@ const port = process.env.PORT || 5000;
 const KRUTRIM_API_URL = process.env.KRUTRIM_API_URL || 'https://cloud.olakrutrim.com/v1/chat/completions';
 const KRUTRIM_API_KEY = process.env.KRUTRIM_API_KEY;
 
-// Fixed exchange rates (you can update these or use a real-time API later)
 const exchangeRates = {
     'USD': 1,
     'EUR': 0.91,
     'GBP': 0.79,
     'INR': 83.12,
     'JPY': 148.15,
-    // Add more currencies as needed
+    
 };
 
-// Currency symbols mapping
+
 const currencySymbols = {
     'USD': '$',
     'EUR': '€',
     'GBP': '£',
     'INR': '₹',
     'JPY': '¥',
-    // Add more currencies as needed
+  
 };
 
 // Function to convert price to target currency
@@ -39,32 +37,32 @@ async function convertPrice(priceStr, targetCurrency) {
     try {
         if (!priceStr || priceStr === 'Free') return priceStr;
         
-        // Extract numeric value (assuming input is in USD format like "$29.99")
+       
         const match = priceStr.match(/\$?(\d+\.?\d*)/);
         if (!match) return priceStr;
 
         const amount = parseFloat(match[1]);
-        const sourceCurrency = 'USD'; // Assuming all prices are in USD by default
+        const sourceCurrency = 'USD'; 
 
         if (sourceCurrency === targetCurrency) return priceStr;
 
-        // Convert using fixed exchange rates
+       
         const rate = exchangeRates[targetCurrency] || 1;
         const convertedAmount = amount * rate;
 
-        // Format the price based on currency
+      
         let formattedPrice;
         switch(targetCurrency) {
             case 'JPY':
-                // Japanese Yen doesn't use decimals
+               
                 formattedPrice = Math.round(convertedAmount);
                 break;
             case 'INR':
-                // Indian format with two decimals
+                
                 formattedPrice = convertedAmount.toFixed(2);
                 break;
             default:
-                // Standard format with two decimals
+                
                 formattedPrice = convertedAmount.toFixed(2);
         }
 
@@ -75,7 +73,7 @@ async function convertPrice(priceStr, targetCurrency) {
     }
 }
 
-// Function to convert all prices in resources
+
 async function convertAllPrices(resources, targetCurrency) {
     console.log('Converting prices to:', targetCurrency);
     const levels = ['beginner', 'intermediate', 'advanced'];
@@ -103,7 +101,7 @@ app.use(express.json());
 app.post('/api/get-resources', async (req, res) => {
     const { subject } = req.body;
     
-    // Check cache
+   
     const cacheKey = subject.toLowerCase();
     const cachedData = cache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp < CACHE_DURATION)) {
@@ -111,18 +109,18 @@ app.post('/api/get-resources', async (req, res) => {
         return res.json(cachedData.data);
     }
 
-    // Get client IP and location
+    
     const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const geo = geoip.lookup(ip);
     
-    // Default to USD if location cannot be determined
+    
     const currencyMap = {
         'US': 'USD',
         'GB': 'GBP',
         'EU': 'EUR',
         'IN': 'INR',
         'JP': 'JPY',
-        // Add more country-currency mappings as needed
+      
     };
     
     const targetCurrency = geo ? currencyMap[geo.country] || 'USD' : 'USD';
@@ -178,24 +176,24 @@ app.post('/api/get-resources', async (req, res) => {
 
         let content;
         if (typeof response.data === 'string') {
-            // Remove all markdown code block markers and trim whitespace
+           
             content = response.data.replace(/```json\s*|\s*```/g, '').trim();
         } else if (response.data.choices && response.data.choices[0].message) {
             content = response.data.choices[0].message.content;
-            // Remove all markdown code block markers and trim whitespace
+         
             content = content.replace(/```json\s*|\s*```/g, '').trim();
         } else {
             throw new Error('Unexpected response format from API');
         }
 
-        // Add better error handling for JSON parsing
+      
         try {
             let resources = JSON.parse(content);
             
-            // Convert prices to local currency
+           
             resources = await convertAllPrices(resources, targetCurrency);
             
-            // Add currency information to the response
+           
             const responseData = {
                 currency: {
                     code: targetCurrency,
@@ -204,7 +202,7 @@ app.post('/api/get-resources', async (req, res) => {
                 resources: resources
             };
 
-            // Cache the response
+          
             cache.set(cacheKey, {
                 timestamp: Date.now(),
                 data: responseData
