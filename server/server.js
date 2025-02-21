@@ -189,11 +189,7 @@ app.post('/api/get-resources', async (req, res) => {
       
         try {
             let resources = JSON.parse(content);
-            
-           
             resources = await convertAllPrices(resources, targetCurrency);
-            
-           
             const responseData = {
                 currency: {
                     code: targetCurrency,
