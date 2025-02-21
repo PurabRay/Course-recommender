@@ -32,7 +32,7 @@ const currencySymbols = {
   
 };
 
-// Function to convert price to target currency
+//Function to convert price to target currency
 async function convertPrice(priceStr, targetCurrency) {
     try {
         if (!priceStr || priceStr === 'Free') return priceStr;
